@@ -19,6 +19,13 @@ from django.http import HttpResponseRedirect
     
 #     return JsonResponse('Mail sent successfully', safe=False)
 
+"""LANDING PAGE"""
+def index_view(request):
+    context = {
+        'error': 'This shit dont work'
+    }
+    return render(request, "library/error.html", context)
+
 """USER AUTHENTICATION & AUTHORIZATION"""
 # @require_http_methods(["POST"])
 # def register_view(self, request):

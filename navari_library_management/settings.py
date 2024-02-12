@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -142,3 +143,12 @@ EMAIL_HOST_PASSWORD = 'wfte hrcq cuua gqag'
 
 # Custom Users
 # AUTH_USER_MODEL = 'library.CustomUser'
+
+# Static files
+
+# Example: "/static/" or "http://static.example.com/"
+STATIC_URL = '/static/'
+
+# Absolute filesystem path to the directory that will hold static files.
+# Example: "/var/www/example.com/static/"
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
