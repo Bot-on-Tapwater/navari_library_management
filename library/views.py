@@ -4,18 +4,36 @@ from django.contrib.auth.tokens import default_token_generator
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.urls import reverse
-from django.http import HttpResponseRedirect
 from .forms import UserForm
 from django.contrib.auth.hashers import make_password, check_password
+from django.urls import reverse
+import uuid
+from django.contrib.sessions.models import Session
+from functools import wraps
+from django.views.decorators.http import require_http_methods
 # Create your views here.
 
+"""DECORATORS"""
+def login_required(view_func):
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if 'user_id' not in request.session:
+            return JsonResponse({'error': 'User is not logged in'}, status=401)
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+def role_required(role):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if 'user_role' not in request.session or request.session['user_role'] != role:
+                return JsonResponse({'error': 'Unauthorized'}, status=403)
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
 """EMAIL & SMTP"""
-def email(subject=None, message=None, from_email=None, recipient_list=None):
-    # subject, message, from_email, recipient_list = ['Test Email', 'This is a test email sent using SMTP in Django.', 'brandonmunda1@gmail.com', ['mundabrandon@outlook.com']]
+def send_email(subject=None, message=None, from_email=None, recipient_list=None):
     from_email = 'brandonmunda1@gmail.com'
 
     send_mail(subject, message, from_email, recipient_list)
@@ -24,10 +42,7 @@ def email(subject=None, message=None, from_email=None, recipient_list=None):
 
 """LANDING PAGE"""
 def index_view(request):
-    context = {
-        'error': 'This shit dont work'
-    }
-    return render(request, "library/error.html", context)
+    return render(request, "library/index.html")
 
 """USER AUTHENTICATION & AUTHORIZATION"""
 @require_http_methods(["POST", "GET"])
@@ -69,7 +84,7 @@ def send_registration_mail(new_user):
 
     message = f"Please click on the following link to verify your email address: {verification_link}"
 
-    email(subject=subject, recipient_list=recipient_list, message=message)
+    send_email(subject=subject, recipient_list=recipient_list, message=message)
 
 def verify_email(request):
     if 'token' in request.GET:
@@ -101,7 +116,9 @@ def login_view(request):
             user = User.objects.get(email=email)
 
             if check_password(password, user.password):
-                return JsonResponse(user.to_dict(), safe=False)
+                request.session['user_id'] = str(user.id)
+                request.session['user_role'] = user.role
+                return render(request, "library/index.html")
 
         except Exception as e:
                 print(e)
@@ -112,4 +129,76 @@ def login_view(request):
 
     else:
         return render(request, "library/login.html")
+
+@require_http_methods(["POST", "GET"])
+def request_password_reset(request):
+    if request.method == "POST":
+        try:
+            email = request.POST['email']
+
+            user = User.objects.get(email=email)
+
+            user.password_reset_token = uuid.uuid4()
+
+            user.save()
+
+            reset_link = f"http://0.0.0.0:8000/library/validate-password-reset-token/?token={user.password_reset_token}"
+
+            subject = "Password Reset Request"
+
+            message = f"Click the link below to reset your password:\n{reset_link}"
+
+            # Send the password reset email
+            send_email(subject=subject, message=message, recipient_list=[user.email])
+
+            return JsonResponse({'message': 'Password reset email sent successfully'})
+
+        except User.DoesNotExist:
+            return JsonResponse({'error': 'User with this email does not exist'})
+
+    else:
+        return render(request, 'library/password_reset_request.html')
+
+@require_http_methods(["GET"])
+def validate_passsword_reset_token(request):
+    if 'token' in request.GET:
+        password_reset_token = request.GET['token']
+        try:
+            user = User.objects.get(password_reset_token=password_reset_token)
+
+            return render(request, 'library/password_reset.html', {'user': user})
+        
+        except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+def reset_password(request):
+    try:
+        password = request.POST['password']
+
+        email = request.POST['email']
+
+        user = User.objects.get(email=email)
+
+        user.set_password(password)
+
+        user.save()
+
+        return JsonResponse({'message': "Password reset successfully"}, safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+    
+def logout_view(request):
+    if 'user_id' in request.session:
+        del request.session['user_id']
+        del request.session['user_role']
+        return render(request, "library/index.html")
 

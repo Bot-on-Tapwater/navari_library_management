@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    {% if request.session.user_id %}
+    <div>Hello {{ request.session.user_id }} ({{ request.session.user_role }})</div>
+    <a href="{% url 'library:logout' %}">Logout</a>
+    {% else %}
+    <div>Login to use the application <a href="{% url 'library:login' %}"> Login</a>
+    </div>
+    {% endif %}
+    
+</body>
+</html>
