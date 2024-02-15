@@ -1,7 +1,7 @@
 from django.shortcuts import render
-from .models import User
+from .models import User, Book, Transaction, Member
 from django.contrib.auth.tokens import default_token_generator
-from django.http import JsonResponse
+from django.http import JsonResponse, QueryDict
 from django.views.decorators.http import require_http_methods
 from django.core.mail import send_mail
 from .forms import UserForm
@@ -11,6 +11,7 @@ import uuid
 from django.contrib.sessions.models import Session
 from functools import wraps
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 # Create your views here.
 
 """DECORATORS"""
@@ -106,6 +107,7 @@ def verify_email(request):
             return render(request, "library/error.html", context)
 
 @require_http_methods(["POST", "GET"])
+@csrf_exempt
 def login_view(request):
     if request.method == "POST":
         try:
@@ -202,3 +204,141 @@ def logout_view(request):
         del request.session['user_role']
         return render(request, "library/index.html")
 
+"""BOOKS"""
+@require_http_methods(["GET"])
+@login_required
+def list_all_books(request):
+    try:
+        all_books = Book.objects.all()
+
+        return JsonResponse([book.to_dict() for book in all_books], safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["GET"])
+@login_required
+def book_with_specific_id(request, book_id):
+    try:
+        book = Book.objects.get(pk=book_id)
+
+        return JsonResponse(book.to_dict(), safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["POST", "GET"])
+@role_required('librarian')
+@csrf_exempt
+def create_new_book(request):
+    try:
+        data = request.POST
+
+        title, author, description, quantity = [data['title'], data['author'], data['description'], data['quantity']]
+
+        new_book = Book(title=title, author=author, description=description, quantity=quantity)
+
+        new_book.save()
+
+        return JsonResponse(new_book.to_dict(), safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["PUT", "GET"])
+@role_required('librarian')
+@csrf_exempt
+def update_book(request, book_id):
+    try:
+        book_to_update = Book.objects.get(pk=book_id)
+
+        for field, value in QueryDict(request.body).items():
+            if (hasattr(book_to_update, field)):
+                setattr(book_to_update, field, value)
+        
+        book_to_update.save()
+        
+        return JsonResponse(book_to_update.to_dict(), safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["DELETE"])
+@role_required('librarian')
+@csrf_exempt
+def delete_book(request, book_id):
+    try:
+        book_to_delete = Book.objects.get(pk=book_id)
+
+        book_to_delete.delete()
+
+        return JsonResponse({"message": "Book deleted successfully"}, safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+"""MEMBERS"""
+def list_all_members(request):
+    try:
+        all_members = Member.objects.all()
+
+        return JsonResponse([member.to_dict() for member in all_members], safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+def member_with_specific_id(request, member_id):
+    try:
+        member = Member.objects.get(pk=member_id)
+
+        return JsonResponse(member.to_dict(), safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+def create_new_member(request):
+    try:
+        data = request.POST
+
+        name, email = [data['name'], data['email']]
+
+        new_member = Member(name=name, email=email)
+
+        new_member.save()
+
+        return JsonResponse(new_member.to_dict(), safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
