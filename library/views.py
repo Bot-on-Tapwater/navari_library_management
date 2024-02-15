@@ -12,6 +12,7 @@ from django.contrib.sessions.models import Session
 from functools import wraps
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+import datetime
 # Create your views here.
 
 """DECORATORS"""
@@ -298,6 +299,9 @@ def delete_book(request, book_id):
             return render(request, "library/error.html", context)
 
 """MEMBERS"""
+@require_http_methods(["GET"])
+@role_required('librarian')
+@csrf_exempt
 def list_all_members(request):
     try:
         all_members = Member.objects.all()
@@ -311,6 +315,9 @@ def list_all_members(request):
             }
             return render(request, "library/error.html", context)
 
+@require_http_methods(["GET"])
+@role_required('librarian')
+@csrf_exempt
 def member_with_specific_id(request, member_id):
     try:
         member = Member.objects.get(pk=member_id)
@@ -324,6 +331,9 @@ def member_with_specific_id(request, member_id):
             }
             return render(request, "library/error.html", context)
 
+@require_http_methods(["POST", "GET"])
+@role_required('librarian')
+@csrf_exempt
 def create_new_member(request):
     try:
         data = request.POST
@@ -342,3 +352,140 @@ def create_new_member(request):
                 'error': str(e)
             }
             return render(request, "library/error.html", context)
+
+@require_http_methods(["PUT", "GET"])
+@role_required('librarian')
+@csrf_exempt
+def update_new_member(request, member_id):
+    try:
+        member_to_update = Member.objects.get(pk=member_id)
+
+        for field, value in QueryDict(request.body).items():
+            if (hasattr(member_to_update, field)):
+                setattr(member_to_update, field, value)
+        
+        member_to_update.save()
+
+        return JsonResponse(member_to_update.to_dict(), safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["DELETE"])
+@role_required('librarian')
+@csrf_exempt
+def delete_member(request, member_id):
+    try:
+         member_to_delete = Member.objects.get(pk=member_id)
+
+         member_to_delete.delete()
+
+         return JsonResponse({"message": "Member deleted successfully"}, safe=False)
+    
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+"""TRANSACTIONS"""
+def issue_book(request, member_id, book_id):
+     try:
+          member = Member.objects.get(pk=member_id)
+
+          book = Book.objects.get(pk=book_id)
+
+          issue_date = datetime.date.today()
+
+          new_transaction = Transaction(member=member, book=book, issue_date=issue_date)
+
+          new_transaction.save()
+
+          book.quantity -= 1
+
+          book.save()
+
+          return JsonResponse(new_transaction.to_dict(), safe=False)
+     
+     except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+def return_book(request, member_id, book_id):
+     try:
+          member = Member.objects.get(pk=member_id)
+
+          book = Book.objects.get(pk=book_id)
+
+          return_date = datetime.date.today()
+
+          new_transaction = Transaction(member=member, book=book, return_date=return_date)
+
+          new_transaction.save()
+
+          book.quantity += 1
+
+          book.save()
+
+          member.fee_balance = sum([transaction.fee for transaction in Transaction.objects.filter(member=member)])
+
+          member.save()
+
+          return JsonResponse(new_transaction.to_dict(), safe=False)
+     
+     except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+def clear_fee_for_book(request, member_id, book_id):
+     try:
+          member = Member.objects.get(pk=member_id)
+
+          book = Book.objects.get(pk=book_id)
+
+          transaction = Transaction.objects.filter(member=member, book=book).exclude(return_date__isnull=False).first()
+
+          transaction.delete()
+
+          member.fee_balance = sum([transaction.fee for transaction in Transaction.objects.filter(member=member)])
+
+          member.save()
+
+          return JsonResponse(member.to_dict(), safe=False)
+     
+     except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+    
+def clear_member_outstanding_balance(request, member_id):
+    try:
+        member = Member.objects.get(pk=member_id)
+
+        [transaction.delete() for transaction in  Transaction.objects.filter(member=member)]
+
+        member.fee_balance = sum([transaction.fee for transaction in Transaction.objects.filter(member=member)])
+
+        member.save()
+
+        return JsonResponse(member.to_dict(), safe=False)
+    
+    except Exception as e:
+        print(e)
+        context = {
+            'error': str(e)
+        }
+        return render(request, "library/error.html", context)

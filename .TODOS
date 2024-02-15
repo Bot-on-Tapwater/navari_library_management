@@ -3,3 +3,5 @@ Type annotate all functions
 Use environment variables in .env file
 
 Do some input validation in the front end, e.g Password Checks
+
+Add link to home page in error.html

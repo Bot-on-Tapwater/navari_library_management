@@ -24,4 +24,11 @@ urlpatterns = [
     path('books/update/<int:book_id>/', views.update_book, name="update-book"),
     path('books/delete/<int:book_id>/', views.delete_book, name="delete-book"),
 
+    # Members
+    path('members/', views.list_all_members, name='members'),
+    path('members/<int:member_id>/', views.member_with_specific_id, name='specific-member'),
+    path('members/create/', views.create_new_member, name="create-member"),
+    path('members/update/<int:member_id>/', views.update_new_member, name="update-member"),
+    path('members/delete/<int:member_id>/', views.delete_member, name="delete-member"),
+
 ]
