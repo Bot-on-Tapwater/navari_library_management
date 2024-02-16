@@ -39,4 +39,8 @@ urlpatterns = [
     path('transactions/', views.list_all_transactions, name='transactions'),
     path('transactions/<int:transaction_id>/', views.transaction_with_transaction_id, name='specific-transaction'),
 
+    # Search
+    path('search/members/', views.search_for_member, name='search-member'),
+    path('search/books/', views.search_for_book, name='search-book'),
+
 ]

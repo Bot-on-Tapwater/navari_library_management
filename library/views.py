@@ -13,6 +13,7 @@ from functools import wraps
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 import datetime
+from django.contrib.postgres.search import SearchVector
 # Create your views here.
 
 """DECORATORS"""
@@ -309,6 +310,7 @@ def delete_book(request, book_id):
 @require_http_methods(["GET"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def list_all_members(request):
     try:
         all_members = Member.objects.all()
@@ -341,6 +343,7 @@ def member_with_specific_id(request, member_id):
 @require_http_methods(["POST", "GET"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def create_new_member(request):
     try:
         data = request.POST
@@ -363,6 +366,7 @@ def create_new_member(request):
 @require_http_methods(["PUT", "GET"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def update_new_member(request, member_id):
     try:
         member_to_update = Member.objects.get(pk=member_id)
@@ -385,6 +389,7 @@ def update_new_member(request, member_id):
 @require_http_methods(["DELETE"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def delete_member(request, member_id):
     try:
          member_to_delete = Member.objects.get(pk=member_id)
@@ -436,6 +441,7 @@ def issue_book(request, member_id, book_id):
 @require_http_methods(["PUT", "GET"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def return_book(request, transaction_id):     
      try:
           transaction = Transaction.objects.get(pk=transaction_id)
@@ -470,6 +476,7 @@ def return_book(request, transaction_id):
 @require_http_methods(["DELETE", "PUT"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def clear_fee_for_book(request, transaction_id):
      try:
           transaction = Transaction.objects.get(pk=transaction_id)
@@ -496,6 +503,7 @@ def clear_fee_for_book(request, transaction_id):
 @require_http_methods(["DELETE", "PUT"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def clear_member_outstanding_balance(request, member_id):
     try:
         member = Member.objects.get(pk=member_id)
@@ -517,7 +525,8 @@ def clear_member_outstanding_balance(request, member_id):
 
 @require_http_methods(["GET"])
 @role_required('librarian')
-@csrf_exempt   
+@csrf_exempt
+@outstanding_balance
 def list_all_transactions(request):
     try:
         all_transactions = Transaction.objects.all()
@@ -534,6 +543,7 @@ def list_all_transactions(request):
 @require_http_methods(["GET"])
 @role_required('librarian')
 @csrf_exempt
+@outstanding_balance
 def transaction_with_transaction_id(request, transaction_id):
      try:
           transaction = Transaction.objects.get(pk=transaction_id)
@@ -567,3 +577,43 @@ def calculate_overdue_charges_and_member_balance():
         member.fee_balance = fee_balance
 
         member.save()
+
+"""SEARCH"""
+@require_http_methods(["GET"])
+@outstanding_balance
+def search_for_book(request):
+    try:
+        search = request.GET.get('search')
+
+        search_vector = SearchVector('title', 'author', 'description')
+
+        books = Book.objects.annotate(search=search_vector).filter(search=search)
+
+        return JsonResponse([book.to_dict() for book in books], safe=False)
+
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["GET"])
+@role_required('librarian')
+@outstanding_balance
+def search_for_member(request):
+    try:
+        search = request.GET.get('search')
+
+        search_vector = SearchVector('email', 'name')
+
+        members = Member.objects.annotate(search=search_vector).filter(search=search)
+
+        return JsonResponse([member.to_dict() for member in members], safe=False)
+
+    except Exception as e:
+                print(e)
+                context = {
+                    'error': str(e)
+                }
+                return render(request, "library/error.html", context)

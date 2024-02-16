@@ -71,6 +71,7 @@ class Member(models.Model):
             'id': self.pk,
             'name': self.name,
             'email': self.email,
+            'debt_limit_reached': self.debt_limit_reached,
             'fee_balance': self.fee_balance,
         }
 
