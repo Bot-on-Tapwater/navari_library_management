@@ -31,4 +31,12 @@ urlpatterns = [
     path('members/update/<int:member_id>/', views.update_new_member, name="update-member"),
     path('members/delete/<int:member_id>/', views.delete_member, name="delete-member"),
 
+    # Transactions
+    path('members/<int:member_id>/books/<int:book_id>/issue/', views.issue_book, name='issue-book'),
+    path('transactions/<int:transaction_id>/return/', views.return_book, name='return-book'),
+    path('transactions/<int:transaction_id>/clear-fee/', views.clear_fee_for_book, name='clear-fee'),
+    path('members/<int:member_id>/clear-balance/', views.clear_member_outstanding_balance, name='clear-balance'),
+    path('transactions/', views.list_all_transactions, name='transactions'),
+    path('transactions/<int:transaction_id>/', views.transaction_with_transaction_id, name='specific-transaction'),
+
 ]

@@ -34,6 +34,13 @@ def role_required(role):
         return wrapper
     return decorator
 
+def outstanding_balance(view_func):
+     @wraps(view_func)
+     def wrapper(request, *args, **kwargs):
+          calculate_overdue_charges_and_member_balance()
+          return view_func(request, *args, **kwargs)
+     return wrapper
+
 """EMAIL & SMTP"""
 def send_email(subject=None, message=None, from_email=None, recipient_list=None):
     from_email = 'brandonmunda1@gmail.com'
@@ -394,9 +401,16 @@ def delete_member(request, member_id):
             return render(request, "library/error.html", context)
 
 """TRANSACTIONS"""
+@require_http_methods(["POST", "GET"])
+@role_required('librarian')
+@csrf_exempt
+@outstanding_balance
 def issue_book(request, member_id, book_id):
      try:
           member = Member.objects.get(pk=member_id)
+
+          if member.debt_limit_reached:
+               return JsonResponse({"message": "Member outstanding debt exceeded library limits!"})
 
           book = Book.objects.get(pk=book_id)
 
@@ -419,17 +433,22 @@ def issue_book(request, member_id, book_id):
             }
             return render(request, "library/error.html", context)
 
-def return_book(request, member_id, book_id):
+@require_http_methods(["PUT", "GET"])
+@role_required('librarian')
+@csrf_exempt
+def return_book(request, transaction_id):     
      try:
-          member = Member.objects.get(pk=member_id)
+          transaction = Transaction.objects.get(pk=transaction_id)
 
-          book = Book.objects.get(pk=book_id)
+          member = transaction.member
+
+          book = transaction.book
 
           return_date = datetime.date.today()
 
-          new_transaction = Transaction(member=member, book=book, return_date=return_date)
+          transaction.return_date = return_date
 
-          new_transaction.save()
+          transaction.save()
 
           book.quantity += 1
 
@@ -437,9 +456,9 @@ def return_book(request, member_id, book_id):
 
           member.fee_balance = sum([transaction.fee for transaction in Transaction.objects.filter(member=member)])
 
-          member.save()
+          member.save()          
 
-          return JsonResponse(new_transaction.to_dict(), safe=False)
+          return JsonResponse(transaction.to_dict(), safe=False)
      
      except Exception as e:
             print(e)
@@ -448,19 +467,22 @@ def return_book(request, member_id, book_id):
             }
             return render(request, "library/error.html", context)
 
-def clear_fee_for_book(request, member_id, book_id):
+@require_http_methods(["DELETE", "PUT"])
+@role_required('librarian')
+@csrf_exempt
+def clear_fee_for_book(request, transaction_id):
      try:
-          member = Member.objects.get(pk=member_id)
+          transaction = Transaction.objects.get(pk=transaction_id)
 
-          book = Book.objects.get(pk=book_id)
+          member = transaction.member
 
-          transaction = Transaction.objects.filter(member=member, book=book).exclude(return_date__isnull=False).first()
-
-          transaction.delete()
+          book = transaction.book
 
           member.fee_balance = sum([transaction.fee for transaction in Transaction.objects.filter(member=member)])
 
           member.save()
+
+          transaction.delete()
 
           return JsonResponse(member.to_dict(), safe=False)
      
@@ -470,7 +492,10 @@ def clear_fee_for_book(request, member_id, book_id):
                 'error': str(e)
             }
             return render(request, "library/error.html", context)
-    
+
+@require_http_methods(["DELETE", "PUT"])
+@role_required('librarian')
+@csrf_exempt
 def clear_member_outstanding_balance(request, member_id):
     try:
         member = Member.objects.get(pk=member_id)
@@ -489,3 +514,56 @@ def clear_member_outstanding_balance(request, member_id):
             'error': str(e)
         }
         return render(request, "library/error.html", context)
+
+@require_http_methods(["GET"])
+@role_required('librarian')
+@csrf_exempt   
+def list_all_transactions(request):
+    try:
+        all_transactions = Transaction.objects.all()
+
+        return JsonResponse([transaction.to_dict() for transaction in all_transactions], safe=False)
+
+    except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+@require_http_methods(["GET"])
+@role_required('librarian')
+@csrf_exempt
+def transaction_with_transaction_id(request, transaction_id):
+     try:
+          transaction = Transaction.objects.get(pk=transaction_id)
+
+          return JsonResponse(transaction.to_dict(), safe=False)
+     
+     except Exception as e:
+            print(e)
+            context = {
+                'error': str(e)
+            }
+            return render(request, "library/error.html", context)
+
+def calculate_overdue_charges_and_member_balance():
+        all_members = Member.objects.all()
+
+        for member in all_members:
+            all_transactions = Transaction.objects.filter(member=member)
+
+        for transaction in all_transactions:
+            days_borrowed = (datetime.date.today() - transaction.issue_date).days
+
+            if (days_borrowed > 14):
+                transaction.fee = 20 + ((days_borrowed - 14) * 10) # Default 20 KES for borrowing book plus 10 KES/day overdue charge after 14 days
+                transaction.save()
+        
+        fee_balance = sum([transaction.fee for transaction in all_transactions])
+        
+        member.debt_limit_reached = True if fee_balance >= 500 else False
+        
+        member.fee_balance = fee_balance
+
+        member.save()

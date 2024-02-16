@@ -6,6 +6,7 @@ from django.contrib.auth.hashers import make_password
 from django.core.validators import MaxValueValidator
 import uuid
 from django.db.models import CheckConstraint, Q
+from datetime import timedelta
 
 class User(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -59,6 +60,7 @@ class Book(models.Model):
 class Member(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField()
+    debt_limit_reached = models.BooleanField(default=False)
     fee_balance = models.PositiveIntegerField(default=0, validators=[MaxValueValidator(500)])
 
     def __str__(self):
@@ -71,33 +73,16 @@ class Member(models.Model):
             'email': self.email,
             'fee_balance': self.fee_balance,
         }
-    
-    class Meta:
-        constraints = [
-            CheckConstraint(
-                check=Q(fee_balance__lte=500),
-                name="check_fee_balance_not_exceed_limit",
-            ),
-        ]
 
 class Transaction(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
     member = models.ForeignKey(Member, on_delete=models.CASCADE)
     issue_date = models.DateField()
     return_date = models.DateField(null=True, blank=True)
-    fee = models.PositiveIntegerField(default=0)
+    fee = models.PositiveIntegerField(default=20) # 20KES for renting book for 14 days
 
     def __str__(self):
         return f"{self.book} - {self.member}"
-    
-    def save(self, *args, **kwargs):
-        """Charge 100 KES per day for every day overdue. Max book borrow duration is 7 days (A week)"""
-        if self.return_date and not self.fee:
-            days_overdue = (self.return_date - self.issue_date) - 7
-
-            self.fee = max(0, days_overdue) * 100
-
-        super().save(*args, **kwargs)
     
     def to_dict(self):
         return {

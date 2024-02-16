@@ -34,6 +34,8 @@ ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
 INSTALLED_APPS = [
     # my app
     'library',
+    # background tasks
+    # 'background_task',
     # default apps
     'django.contrib.admin',
     'django.contrib.auth',
